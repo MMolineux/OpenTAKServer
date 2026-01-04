@@ -1,24 +1,28 @@
+# build with context from root of source tree
+# setup base image
 FROM python:3.13
-
 RUN addgroup --gid 1024 ots
 RUN adduser --home /app --disabled-password --gecos "" --force-badname --gid 1024 ots
-
+RUN apt update && apt install ffmpeg -y
+USER ots
 WORKDIR /app/opentakserver
-
-COPY . /app/
-
 RUN chown -R ots:ots /app
 
+# docker build args
+ARG BUILD_VERSION
+ENV VERSION=${BUILD_VERSION}
+
+# setup python virtual env
 RUN python -m venv /app/venv
 ENV PATH="/app/venv/bin:$PATH"
 
-RUN pip install git+https://github.com/brian7704/OpenTAKServer.git@docker
+# copy and install pip package _locally_, to avoid coupling to a specific repo
+RUN mkdir /tmp/server
+COPY ./server /tmp/server
+RUN pip install /tmp/server
 
-USER ots
-
-EXPOSE 8088
-
-CMD ["/app/venv/bin/eud_handler", "--no-ssl"]
+# entry point
+ENTRYPOINT ["/app/venv/bin/cot_parser"]
 
 # Flask will stop gracefully on SIGINT (Ctrl-C).
 # Docker compose tries to stop processes using SIGTERM by default, then sends SIGKILL after a delay if the process doesn't stop.
