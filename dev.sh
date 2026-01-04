@@ -23,16 +23,17 @@ if [[ "$1" == "clean" ]]; then
     docker compose down -v
     tmux kill-session -t OTS 2>/dev/null
 
-    if [[ -d "./ots" ]]; then
+    if [[ -d "./server/ots" ]]; then
         read -rp "$(yel "Do you also want to remove the OTS data folder? (y/N): ")" confirm
         if [[ "$confirm" =~ ^[Yy](es)?$ ]]; then
-            rm -rf ./ots
+            rm -rf ./server/ots
             echo "OTS data folder removed."
         else
             echo "OTS data folder not removed."
         fi
     fi
 
+    rm -rf ./web/node_modules
 elif [[ "$1" == "start" ]]; then
     service="$2"
 
@@ -43,7 +44,7 @@ elif [[ "$1" == "start" ]]; then
     fi
 
     purp "Syncing poetry dependencies..."
-    if poetry lock && poetry sync; then
+    if poetry --directory ./server lock && poetry --directory ./server sync; then
         grn "Poetry dependencies are up to date."
     else
         red "Failed to sync poetry dependencies."
@@ -100,13 +101,17 @@ elif [[ "$1" == "start" ]]; then
         tmux send-keys -t "$SESSION:server.0" "echo 'Opening Aspire Dashboard at ${aspire_url}'; xdg-open ${aspire_url}" C-m
 
         # # server
-        tmux send-keys -t "$SESSION" 'poetry run opentakserver' C-m
+        tmux send-keys -t "$SESSION" 'poetry --directory ./server run opentakserver' C-m
 
         # workers window with two panes
         tmux new-window -t "$SESSION" -n workers
         tmux split-window -t "$SESSION:workers" -h
-        tmux send-keys -t "$SESSION:workers.0" 'poetry run eud_handler' C-m
-        tmux send-keys -t "$SESSION:workers.1" 'poetry run cot_parser' C-m
+        tmux send-keys -t "$SESSION:workers.0" 'poetry --directory ./server run eud_handler' C-m
+        tmux send-keys -t "$SESSION:workers.1" 'poetry --directory ./server run cot_parser' C-m
+
+        # window for frontend
+        tmux new-window -t "$SESSION" -n frontend
+        tmux send-keys -t "$SESSION:frontend" 'cd ./web && bash ./dev.sh' C-m
 
         tmux select-window -t "$SESSION:server"
         tmux attach -t "$SESSION"
@@ -130,7 +135,7 @@ elif [[ "$1" == "start" ]]; then
         case $service in
             "opentakserver"|"eud_handler"|"cot_parser")
                 purp "Starting $service..."
-                poetry run "$service"
+                poetry --directory ./server run "$service"
                 ;;
             *)
                 red "Invalid service: $service"
