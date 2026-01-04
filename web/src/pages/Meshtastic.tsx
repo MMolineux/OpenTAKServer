@@ -1,0 +1,309 @@
+import {
+    Button,
+    Center, CopyButton, Modal, NumberInput,
+    Pagination, Paper, Select, Switch,
+    Table,
+    TableData, TextInput, Tooltip,
+    useComputedColorScheme,
+} from '@mantine/core';
+import { notifications } from '@mantine/notifications';
+import React, { useEffect, useState } from 'react';
+import { IconCircleMinus, IconX, IconCheck, IconQrcode, IconPlus, IconReload } from '@tabler/icons-react';
+import { QRCode } from 'react-qrcode-logo';
+import axios from '@/axios_config';
+import { apiRoutes } from '@/apiRoutes';
+import Logo from "@/images/ots-logo.png";
+import {t} from "i18next";
+
+export default function Meshtastic() {
+    const computedColorScheme = useComputedColorScheme('light', { getInitialValueInEffect: true });
+    const [activePage, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [showQrCode, setShowQrCode] = useState(false);
+    const [qrTitle, setQrTitle] = useState('');
+    const [channelUrl, setChannelUrl] = useState('');
+    const [channelToDelete, setChannelToDelete] = useState('');
+    const [deleteChannelOpen, setDeleteChanelOpen] = useState(false);
+    const [channelNameError, setChannelNameError] = useState('');
+    const [showAddChannel, setShowAddChannel] = useState(false);
+    const [showNewChannel, setShowNewChannel] = useState(false);
+    const [psk, setPsk] = useState('');
+    const [channelProperties, setChannelProperties] = useState({
+        name: '',
+        psk: '',
+        uplink_enabled: false,
+        downlink_enabled: false,
+        position_precision: 32,
+        lora_region: 'UNSET',
+        lora_hop_limit: 3,
+        lora_tx_enabled: false,
+        lora_tx_power: 30,
+        lora_sx126x_rx_boosted_gain: false,
+        modem_preset: 'LONG_FAST',
+    });
+    const [channels, setChannels] = useState<TableData>({
+        caption: '',
+        head: [t('Name'), t('PSK'), t('Uplink Enabled'), t('Downlink Enabled'), t('Position Precision'), t('LoRa Region'), t('Hop Limit'), t('TX Enabled'), t('TX Power'), t('RX Gain Boost'), t('Modem Preset')],
+        body: [],
+    });
+
+    function generatePsk() {
+        axios.get(
+            apiRoutes.generateMeshtasticPsk
+        ).then(r => {
+            if (r.status === 200) {
+                channelProperties.psk = r.data.psk;
+                setPsk(r.data.psk);
+            }
+        });
+    }
+
+    function addChannel() {
+        if (!channelProperties.name) {
+            setChannelNameError(t('Name cannot be blank'));
+        } else {
+            channelProperties.psk = psk;
+            axios.post(
+                apiRoutes.meshtasticChannels,
+                { ...channelProperties }
+            ).then(r => {
+                if (r.status === 200) {
+                    getChannels();
+                    notifications.show({
+                        message: t('Successfully added channel'),
+                        icon: <IconCheck />,
+                        color: 'green',
+                    });
+                    setShowNewChannel(false);
+                    setPsk('');
+                    setChannelProperties({
+                        name: '',
+                        psk: '',
+                        uplink_enabled: false,
+                        downlink_enabled: false,
+                        position_precision: 32,
+                                                lora_region: 'UNSET',
+                        lora_hop_limit: 3,
+                        lora_tx_enabled: false,
+                        lora_tx_power: 30,
+                        lora_sx126x_rx_boosted_gain: false,
+                        modem_preset: 'LONG_FAST',
+                    });
+                }
+            }).catch(err => {
+                console.log(err);
+                notifications.show({
+                    title: t('Failed to add channel'),
+                    message: err.response.data.error,
+                    icon: <IconX />,
+                    color: 'red',
+                });
+            });
+        }
+    }
+
+    useEffect(() => {
+        getChannels();
+    }, [activePage]);
+
+    function addChannelByUrl(e:any) {
+        e.preventDefault();
+        axios.post(
+            apiRoutes.meshtasticChannels,
+            { url: channelUrl }
+        ).then(r => {
+            if (r.status === 200) {
+                notifications.show({
+                    message: t('Successfully added channel'),
+                    icon: <IconCheck />,
+                    color: 'green',
+                });
+                setShowAddChannel(false);
+                getChannels();
+            }
+        }).catch(err => {
+            console.log(err);
+            notifications.show({
+                title: t('Failed to add channel'),
+                message: err.response.data.error,
+                color: 'red',
+                icon: <IconX />,
+            });
+        });
+    }
+
+    function getChannels() {
+        axios.get(
+            apiRoutes.meshtasticChannels,
+            { params: {
+                    page: activePage,
+                } }
+        ).then(r => {
+            if (r.status === 200) {
+                const tableData: TableData = {
+                    caption: '',
+                    head: [t('Name'), t('PSK'), t('Uplink Enabled'), t('Downlink Enabled'), t('Position Precision'), t('LoRa Region'), t('Hop Limit'), t('TX Enabled'), t('TX Power'), t('RX Gain Boost'), t('Modem Preset')],
+                    body: [],
+                };
+
+                r.data.results.map((row: any) => {
+                    if (tableData.body !== undefined) {
+                        const qrButton = <Button
+                          rightSection={<IconQrcode size={14} />}
+                          onClick={() => {
+                                setShowQrCode(true);
+                                setChannelUrl(row.url);
+                                setQrTitle(row.name);
+                            }}
+                        >{t("QR Code")}
+                                         </Button>;
+
+                        const delete_button = <Button
+                          onClick={() => {
+                                setChannelToDelete(row.url);
+                                setDeleteChanelOpen(true);
+                            }}
+                          key={`${row.hash}_delete`}
+                          rightSection={<IconCircleMinus size={14} />}
+                          color="red"
+                        >{t("Delete")}
+                                              </Button>;
+
+                        const uplink_enabled = row.uplink_enabled ? <IconCheck color="green" /> : <IconX color="red" />;
+                        const downlink_enabled = row.downlink_enabled ? <IconCheck color="green" /> : <IconX color="red" />;
+                        const tx_enabled = row.lora_tx_enabled ? <IconCheck color="green" /> : <IconX color="red" />;
+                        const lora_sx126x_rx_boosted_gain = row.lora_sx126x_rx_boosted_gain ? <IconCheck color="green" /> : <IconX color="red" />;
+                        const url = <CopyButton value={row.url}>{({ copied, copy }) => (
+                                                <Tooltip label={row.url}>
+                                                    <Button color={copied ? 'teal' : 'blue'} onClick={copy}>
+                                                        {copied ? t('Copied URL') : t('Copy URL')}
+                                                    </Button>
+                                                </Tooltip>
+                                                )}
+                                    </CopyButton>;
+
+                        let psk_button;
+                        if (row.psk) {
+                            psk_button = <CopyButton value={row.psk}>{({ copied, copy }) => (
+                                    <Tooltip label={row.psk}>
+                                        <Button color={copied ? 'teal' : 'blue'} onClick={copy}>
+                                            {copied ? t('Copied PSK') : t('Copy PSK')}
+                                        </Button>
+                                    </Tooltip>
+                                    )}
+                                         </CopyButton>;
+                        } else {
+                            psk_button = <Button disabled>Encryption Disabled</Button>;
+                        }
+
+                        tableData.body.push([row.name, psk_button, uplink_enabled, downlink_enabled,
+                            row.position_precision, row.lora_region, row.lora_hop_limit, tx_enabled,
+                            row.lora_tx_power, lora_sx126x_rx_boosted_gain, row.modem_preset, url,
+                            qrButton, delete_button,
+                        ]);
+                    }
+
+                    setPage(r.data.current_page);
+                    setTotalPages(r.data.total_pages);
+                    setChannels(tableData);
+                });
+            }
+        }).catch(err => {
+            notifications.show({
+                title: t('Error getting channel list'),
+                message: err.response.data.error,
+                color: 'red',
+                icon: <IconX />,
+            });
+        });
+    }
+
+    function deleteChannel() {
+        axios.delete(
+            apiRoutes.meshtasticChannels,
+            { params: { url: channelToDelete } }
+        ).then(r => {
+            notifications.show({
+                message: t('Channel successfully deleted'),
+                icon: <IconCheck />,
+                color: 'green',
+            });
+            setDeleteChanelOpen(false);
+            getChannels();
+        }).catch(err => {
+            console.log(err);
+            notifications.show({
+                title: t('Failed to delete channel'),
+                message: err.response.data.error,
+                icon: <IconX />,
+                color: 'red',
+            });
+        });
+    }
+
+    return (
+        <>
+            <Modal opened={showQrCode} onClose={() => setShowQrCode(false)} title={qrTitle}>
+                <Center>
+                    <Paper p="md" shadow="xl" withBorder bg="white">
+                        <QRCode value={channelUrl} size={350} quietZone={10} logoImage={Logo} eyeRadius={50} ecLevel="L" qrStyle="dots" logoWidth={100} logoHeight={100} />
+                    </Paper>
+                </Center>
+            </Modal>
+            <Modal opened={deleteChannelOpen} onClose={() => setDeleteChanelOpen(false)} title={t("Are you sure you want to delete this channel?")}>
+                <Center>
+                    <Button
+                      mr="md"
+                      onClick={() => {
+                          deleteChannel();
+                      }}
+                    >Yes
+                    </Button>
+                    <Button onClick={() => setDeleteChanelOpen(false)}>No</Button>
+                </Center>
+            </Modal>
+            <Modal opened={showAddChannel} onClose={() => setShowAddChannel(false)} title={t("Add Existing Channel")}>
+                <TextInput required placeholder="https://meshtastic.org/e/#CgMSAQESDAgBOAFAA0gBUB5oAQ==" label={t("URL")} onChange={e => { setChannelUrl(e.target.value); }} mb="md" />
+                <Button onClick={e => addChannelByUrl(e)}>{t("Add Channel")}</Button>
+            </Modal>
+            <Modal opened={showNewChannel} onClose={() => setShowNewChannel(false)} title={t("Add New Channel")}>
+                <TextInput required label={t("Name")} onChange={e => { channelProperties.name = e.target.value; setChannelNameError(''); }} mb="md" error={channelNameError} />
+                <TextInput label={t("PSK")} value={psk} rightSection={<IconReload onClick={() => generatePsk()} />} mb="md" onChange={(e) => setPsk(e.target.value)} />
+                <Switch label={t("Uplink Enabled")} onChange={e => { channelProperties.uplink_enabled = e.target.checked; }} mb="md" />
+                <Switch label={t("Downlink Enabled")} onChange={e => { channelProperties.downlink_enabled = e.target.checked; }} mb="md" />
+                <NumberInput label={t("Position Precision")} min={0} max={32} defaultValue={channelProperties.position_precision} onChange={e => { channelProperties.position_precision = Number(e); }} mb="md" />
+                <Select
+                  label={t("Region")}
+                  onChange={e => { channelProperties.lora_region = String(e); }}
+                  data={['UNSET', 'US', 'EU_433', 'EU_868', 'CN', 'JP', 'ANZ', 'KR', 'TW', 'RU', 'IN', 'NZ_865', 'TH', 'LORA_24', 'UA_433', 'UA_868', 'MY_433', 'SG_923']}
+                  mb="md"
+                  defaultValue="UNSET"
+                />
+                <NumberInput label={t("Hop Limit")} min={0} max={10} defaultValue={channelProperties.lora_hop_limit} onChange={e => { channelProperties.lora_hop_limit = Number(e); }} mb="md" />
+                <Switch label={t("TX Enabled")} onChange={e => { channelProperties.lora_tx_enabled = e.target.checked; }} mb="md" />
+                <NumberInput label={t("TX Power")} min={0} max={100} defaultValue={channelProperties.lora_tx_power} onChange={e => { channelProperties.lora_tx_power = Number(e); }} mb="md" />
+                <Switch label={t("RX Boost Gain")} onChange={e => { channelProperties.lora_sx126x_rx_boosted_gain = e.target.checked; }} mb="md" />
+                <Select
+                  label={t("Modem Preset")}
+                  onChange={e => { channelProperties.modem_preset = String(e); }}
+                  data={['LONG_FAST', 'LONG_SLOW', 'VERY_LONG_SLOW', 'MEDIUM_SLOW', 'MEDIUM_FAST', 'SHORT_SLOW', 'SHORT_FAST', 'LONG_MODERATE', 'SHORT_TURBO']}
+                  mb="md"
+                  defaultValue="LONG_FAST"
+                />
+                <Button
+                  mb="md"
+                  onClick={e => {
+                    addChannel();
+                }}
+                >{t("Add Channel")}
+                </Button>
+            </Modal>
+            <Button leftSection={<IconPlus size={14} />} onClick={() => setShowAddChannel(true)} mr="md">{t("Add Existing Channel")}</Button>
+            <Button leftSection={<IconPlus size={14} />} onClick={() => setShowNewChannel(true)}>{t("Add New Channel")}</Button>
+            <Table.ScrollContainer minWidth="100%">
+                <Table data={channels} stripedColor={computedColorScheme === 'light' ? 'gray.2' : 'dark.8'} highlightOnHoverColor={computedColorScheme === 'light' ? 'gray.4' : 'dark.6'} striped="odd" highlightOnHover withTableBorder mt="md" mb="md" />
+            </Table.ScrollContainer>
+            <Center><Pagination total={totalPages} value={activePage} onChange={setPage} withEdges /></Center>
+        </>
+    );
+}
