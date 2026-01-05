@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "vite --force",
-    "build": "ts-appversion --git=. && tsc && vite build",
+    "build": "ts-appversion --git=.. && tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "npm run eslint && npm run stylelint",
@@ -120,5 +120,5 @@
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "3.2.3"
   },
-  "packageManager": "yarn@4.0.2"
+  "packageManager": "yarn@4.12.0"
 }
