@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# local development helper script
+# local development helper script. infra deps are run in docker containers,
+# while python services are run via poetry locally.
 
-CONTAINERS=( "ots-db" "rabbitmq" ) # "mediamtx"
+CONTAINERS=( "ots-db" "rabbitmq" "aspire" ) # "mediamtx"
 
 purp() { printf "\033[0;35m[$(basename "$0")] %s\033[0m\n" "$1"; }
 red() { printf "\033[0;31m[$(basename "$0")] %s\033[0m\n" "$1"; }
@@ -20,7 +21,7 @@ done
 # parse args
 if [[ "$1" == "clean" ]]; then
     purp "Cleaning up development environment..."
-    docker compose down -v
+    docker compose down -v ${CONTAINERS[@]}
     tmux kill-session -t OTS 2>/dev/null
 
     if [[ -d "./server/ots" ]]; then
@@ -38,7 +39,7 @@ elif [[ "$1" == "start" ]]; then
     service="$2"
 
     purp "Starting docker containers..."
-    if ! docker compose up -d; then
+    if ! docker compose up -d ${CONTAINERS[@]}; then
         red "Failed to start docker containers."
         exit 1
     fi
@@ -58,7 +59,12 @@ elif [[ "$1" == "start" ]]; then
     while true; do
         all_healthy=true
         for container in "${CONTAINERS[@]}"; do
-            status=$(docker inspect --format='{{.State.Health.Status}}' "$container")
+            health=$(docker inspect --format='{{json .State.Health}}' "$container" | jq -r 'select(.Status != null)')
+            if [ -z "$health" ]; then
+                # No healthcheck defined, assume healthy
+                continue
+            fi
+            status=$(echo $health | jq -r '.Status')
             if [ "$status" != "healthy" ]; then
                 all_healthy=false
                 printf "%s is %s\\r" "$container" "$status"
@@ -86,7 +92,7 @@ elif [[ "$1" == "start" ]]; then
 
     # start services: use tmux if available, otherwise prompt which single service to run
     SESSION="OTS"
-    export $(cat .env.dev | xargs)
+    export $(cat .env.dev | grep -v '^#' | xargs)
 
     if [[ -z "$service" ]] && command -v tmux &>/dev/null; then
         if tmux has-session -t "$SESSION" 2>/dev/null; then
@@ -97,7 +103,7 @@ elif [[ "$1" == "start" ]]; then
         tmux new-session -d -s "$SESSION"
         tmux rename-window -t "$SESSION:0" 'server'
         tmux split-window -t "$SESSION:server" -v
-        export aspire_url=$(docker compose logs aspire-dashboard | grep -Po "(?<=Login to the dashboard at )http(s)?://[^:/]+(:[0-9]+)?/login\?t=[^ ]+")
+        export aspire_url=$(docker compose logs aspire | grep -Po "(?<=Login to the dashboard at )http(s)?://[^:/]+(:[0-9]+)?/login\?t=[^ ]+")
         tmux send-keys -t "$SESSION:server.0" "echo 'Opening Aspire Dashboard at ${aspire_url}'; xdg-open ${aspire_url}" C-m
 
         # # server
@@ -111,7 +117,7 @@ elif [[ "$1" == "start" ]]; then
 
         # window for frontend
         tmux new-window -t "$SESSION" -n frontend
-        tmux send-keys -t "$SESSION:frontend" 'cd ./web && bash ./dev.sh' C-m
+        tmux send-keys -t "$SESSION:frontend" 'cd ./ui && bash ./dev.sh' C-m
 
         tmux select-window -t "$SESSION:server"
         tmux attach -t "$SESSION"

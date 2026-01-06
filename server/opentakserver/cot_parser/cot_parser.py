@@ -1,8 +1,10 @@
 import base64
 import logging
 import platform
-from logging.handlers import TimedRotatingFileHandler
-from opentakserver.telemetry import TelemetryOpts, setup_telemetry
+from opentakserver.extensions import inject_extension_dependencies,ExtensionOpts
+inject_extension_dependencies(ExtensionOpts(service_name="cot_parser")) #TODO: replace this dirty DI hack for proper DI
+from opentakserver.extensions import logger, db
+
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
 
 from typing import Any
@@ -44,7 +46,6 @@ from opentakserver.models.MissionUID import MissionUID
 from opentakserver.models.WebAuthn import WebAuthn
 
 from opentakserver.proto import atak_pb2
-from opentakserver.extensions import logger, db
 from opentakserver.functions import datetime_from_iso8601_string
 from opentakserver.models.Chatrooms import Chatroom
 from opentakserver.models.Alert import Alert
@@ -64,7 +65,6 @@ from opentakserver.models.Marker import Marker
 from opentakserver.models.DataPackage import DataPackage
 from opentakserver.models.Certificate import Certificate
 from opentakserver.models.Group import Group
-from opentakserver.telemetry.ots import configure_logging, configure_metrics, configure_tracing
 
 
 class CoTController:

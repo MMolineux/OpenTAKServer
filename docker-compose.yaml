@@ -1,6 +1,9 @@
 # docker compose file for server side deps
 
 services:
+  ###################
+  #   INFRA DEPS    #
+  ###################
   rabbitmq:
     image: rabbitmq:3.13-management
     container_name: rabbitmq
@@ -22,7 +25,7 @@ services:
       - rabbitmq-data:/var/lib/rabbitmq
       - rabbitmq-etc:/etc/rabbitmq
     healthcheck:
-      test: rabbitmq-diagnostics -q ping
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
       interval: 30s
       timeout: 30s
       retries: 3
@@ -33,7 +36,7 @@ services:
     hostname: ots-db
     restart: unless-stopped
     env_file:
-      - .env.dev
+      - .env.docker
     volumes:
       - ots-db-data:/var/lib/postgresql/data
     healthcheck:
@@ -44,12 +47,108 @@ services:
     ports:
       - "5432:5432"
 
-  aspire-dashboard:
-    container_name: aspire-dashboard
+  ###################
+  #   DEV TOOLS     #
+  ###################
+
+  aspire:
+    container_name: aspire
     image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
     ports:
       - "18888:18888" # Dashboard UI
       - "4317:18889" # OTLP endpoint for receiving telemetry
+  # control HTTP ingress, similar to production kubernetes
+  ingress:
+    image: traefik
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.weblocal.address=:80
+      - --log.level=DEBUG
+      - --api.dashboard=true
+      - --api.insecure=true
+    ports:
+      - "8080:80"
+      - "8888:8080" # traefik dashboard.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  ###################
+  # OTS COMPONENTS  #
+  ###################
+  cot_parser:
+    build:
+      context: .
+      dockerfile: ./server/Dockerfile.cot_parser
+    image: cot_parser
+    container_name: cot_parser
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      - OTEL_SERVICE_NAME=cot_parser
+    depends_on:
+      - rabbitmq
+      - ots-db
+      - opentakserver
+
+  eud_handler:
+    build:
+      context: .
+      dockerfile: ./server/Dockerfile.eud_handler
+    image: eud_handler
+    container_name: eud_handler
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      - OTEL_SERVICE_NAME=eud_handler
+    ports:
+      - "8088:8088" # directly exposed TCP stream, no need for http ingress
+    depends_on:
+      - rabbitmq
+      - ots-db
+      - opentakserver
+
+  opentakserver:
+    build:
+      context: .
+      dockerfile: ./server/Dockerfile
+    image: opentakserver
+    container_name: opentakserver
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    ports:
+      - "8081:8081"
+    depends_on:
+      - rabbitmq
+      - ots-db
+    healthcheck:
+      test:
+        ["CMD-SHELL", "curl --fail http://localhost:8081/api/health || exit 1"]
+      interval: 2s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.server.rule=PathPrefix(`/api`) || PathPrefix(`/socket.io`) || PathPrefix(`/Marti`)"
+      - "traefik.http.routers.server.entrypoints=weblocal"
+
+  ui:
+    build:
+      context: .
+      dockerfile: ./ui/Dockerfile
+    container_name: ui
+    restart: unless-stopped
+    ports:
+      - "80"
+    depends_on:
+      - opentakserver
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ui.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.ui.entrypoints=weblocal"
 
 volumes:
   rabbitmq-data:

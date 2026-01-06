@@ -38,8 +38,10 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8081', // The address of your backend server
-        // rewrite: (path) => path.replace(/^\/api/, ''), // Rewrite the URL path
+        target: 'http://localhost:8081',
+      },
+      '/socket.io': {
+        target: 'http://localhost:8081',
       }
     }
   }

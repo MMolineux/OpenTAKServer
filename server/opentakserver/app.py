@@ -2,9 +2,12 @@ from gevent import monkey,greenlet
 monkey.patch_all()
 
 import pytz
+from opentakserver.extensions import ExtensionOpts, inject_extension_dependencies
+inject_extension_dependencies(ExtensionOpts(service_name="opentakserver")) #TODO: replace this dirty DI hack for proper DI
+from opentakserver.extensions import logger, db, socketio, mail, apscheduler, ldap_manager
+
 from opentakserver.models.role import Role
 from opentakserver.telemetry.context import LogCtx
-from opentakserver.extensions import logger, db, socketio, mail, apscheduler, ldap_manager
 
 from typing import Any
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
@@ -45,7 +48,6 @@ from flask_security.models import fsqla_v3 as fsqla, fsqla_v3
 from flask_security.signals import user_registered
 
 import opentakserver
-from opentakserver.extensions import logger, db, socketio, mail, apscheduler, ldap_manager, babel
 from opentakserver.defaultconfig import DefaultConfig
 from opentakserver.models.WebAuthn import WebAuthn
 

@@ -1,7 +1,7 @@
 # build with context from root of source tree
 FROM node:lts AS build
 WORKDIR /app
-COPY ./web /app
+COPY ./ui /app
 RUN corepack enable && yarn set version berry
 RUN git config --global url."https://github".insteadOf ssh://git@github && \
     git config --global url."https://github.com/".insteadOf git@github.com:
