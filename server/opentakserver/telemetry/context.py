@@ -16,6 +16,7 @@ def get_service_context(service_name:str = "") -> dict:
     if env_service_name:
         # Determine a stable service name and version. Prefer env override.
         service_name = env_service_name
+        
     try:
         service_version = metadata.version(service_name)
     except metadata.PackageNotFoundError:
