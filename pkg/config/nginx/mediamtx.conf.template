@@ -1,0 +1,19 @@
+# Proxy RTSPS and RTMPS through nginx because MediaMTX doesn't have permissions to read Let's Encrypt certs files
+
+# RTSP
+server {
+    listen     8322 ssl;
+    proxy_pass ${MEDIAMTX_HOST}:8554;
+
+    ssl_certificate ${OTS_SERVER_CERT};
+    ssl_certificate_key ${OTS_SERVER_KEY};
+}
+
+# RTMP
+server {
+    listen     1936 ssl;
+    proxy_pass ${MEDIAMTX_HOST}:1935;
+
+    ssl_certificate ${OTS_SERVER_CERT};
+    ssl_certificate_key ${OTS_SERVER_KEY};
+}

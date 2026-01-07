@@ -72,21 +72,6 @@ opentelemetry-instrumentation-sqlalchemy = "^0.59b0"
 opentelemetry-instrumentation-pika = "^0.59b0"
 zope-interface = "8.1.1"
 
-[tool.poetry-dynamic-versioning]
-enable = true
-vcs = "git"
-style = "semver"
-dirty = false
-pattern = "((?P<epoch>\\d+)!)?(?P<base>\\d+(\\.\\d+)*)"
-
-[tool.poetry-dynamic-versioning.files."opentakserver/__init__.py"]
-persistent-substitution = true
-initial-content = """
-  # These version placeholders will be replaced later during substitution.
-  __version__ = "0.0.0"
-  __version_tuple__ = (0, 0, 0)
-"""
-
 [build-system]
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
 build-backend = "poetry_dynamic_versioning.backend"

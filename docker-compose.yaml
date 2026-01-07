@@ -1,6 +1,9 @@
 # docker compose file for server side deps
 
 services:
+  ###################
+  #   INFRA DEPS    #
+  ###################
   rabbitmq:
     image: rabbitmq:3.13-management
     container_name: rabbitmq
@@ -22,7 +25,7 @@ services:
       - rabbitmq-data:/var/lib/rabbitmq
       - rabbitmq-etc:/etc/rabbitmq
     healthcheck:
-      test: rabbitmq-diagnostics -q ping
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
       interval: 30s
       timeout: 30s
       retries: 3
@@ -33,7 +36,7 @@ services:
     hostname: ots-db
     restart: unless-stopped
     env_file:
-      - .env.dev
+      - .env.docker
     volumes:
       - ots-db-data:/var/lib/postgresql/data
     healthcheck:
@@ -44,14 +47,142 @@ services:
     ports:
       - "5432:5432"
 
-  aspire-dashboard:
-    container_name: aspire-dashboard
+  mediamtx:
+    image: bluenviron/mediamtx:1-ffmpeg
+    ports:
+      - 8554:8554
+      - 1935:1935
+      - 8888:8888
+      - 8889:8889
+      - 8890:8890/udp
+      - 8189:8189/udp
+
+  ###################
+  #   DEV TOOLS     #
+  ###################
+
+  aspire:
+    container_name: aspire
     image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
     ports:
       - "18888:18888" # Dashboard UI
       - "4317:18889" # OTLP endpoint for receiving telemetry
 
+  ###################
+  # OTS COMPONENTS  #
+  ###################
+
+  # http routing proxy, with mTLS auth for MartiAPI
+  proxy:
+    image: nginx:stable-alpine3.23
+    ports:
+      - "80:80" # web and api
+      - "443:443" # web and api
+      - "8080:8080" # web and api alt
+      - "8443:8443" # mTLS marti api
+      - "8446:8446" # mTLS cert enrolment
+    environment:
+      - OTS_SERVER_CERT=/opentakserver/ots/ca/certs/opentakserver/opentakserver.pem
+      - OTS_SERVER_KEY=/opentakserver/ots/ca/certs/opentakserver/opentakserver.nopass.key
+      - OTS_TRUSTED_CA_CERT=/opentakserver/ots/ca/ca-trusted.pem
+      - OTS_API_URL=http://opentakserver:8081
+      - OTS_UI_URL=http://ui:80
+      - MEDIAMTX_HOST=mediamtx
+      - RMQ_HOST=rabbitmq
+    volumes:
+      - ./pkg/config/nginx/mtls.conf.template:/etc/nginx/templates/mtls.conf.template # mtls MartiAPI
+      - ./pkg/config/nginx/cert-enrol.conf.template:/etc/nginx/templates/cert-enrol.conf.template # mTLS cert enrolment
+      - ./pkg/config/nginx/ots_api.conf.template:/etc/nginx/templates/ots_api.conf.template # web and api
+      # - ./pkg/config/nginx/rmq.conf.template:/etc/nginx/templates/rmq.conf.template # rabbitmq
+      # - ./pkg/config/nginx/mediamtx.conf.template:/etc/nginx/templates/mediamtx.conf.template # mediamtx
+      - ots_shared:/opentakserver
+
+  cot_parser:
+    build:
+      context: .
+      dockerfile: ./pkg/docker/Dockerfile.cot_parser
+    #TODO: image: ghcr.io/MMolineux/ots_cot_parser
+    container_name: cot_parser
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      - OTEL_SERVICE_NAME=cot_parser
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      ots-db:
+        condition: service_healthy
+      opentakserver:
+        condition: service_healthy
+    volumes:
+      - ots_shared:/app/opentakserver/
+
+  eud_handler:
+    build:
+      context: .
+      dockerfile: ./pkg/docker/Dockerfile.eud_handler
+    #TODO: image: ghcr.io/MMolineux/ots_eud_handler
+    container_name: eud_handler
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    command:
+      - --ssl
+    environment:
+      - OTEL_SERVICE_NAME=eud_handler
+    ports:
+      - "8089:8089" # directly exposed TCP stream, no need for ingress control
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      ots-db:
+        condition: service_healthy
+      opentakserver:
+        condition: service_healthy
+    volumes:
+      - ots_shared:/app/opentakserver/
+
+  opentakserver:
+    build:
+      context: .
+      dockerfile: ./pkg/docker/Dockerfile.ots
+    #TODO: image: ghcr.io/MMolineux/opentakserver
+    container_name: opentakserver
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    ports:
+      - "8081:8081"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      ots-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        ["CMD-SHELL", "curl --fail http://localhost:8081/api/health || exit 1"]
+      interval: 2s
+      timeout: 10s
+      retries: 3
+    volumes:
+      - ots_shared:/app/opentakserver/
+
+  ui:
+    build:
+      context: .
+      dockerfile: ./pkg/docker/Dockerfile.ui
+    #TODO: image: ghcr.io/MMolineux/ots_ui
+    container_name: ui
+    restart: unless-stopped
+    ports:
+      - "80"
+    depends_on:
+      opentakserver:
+        condition: service_healthy
+
 volumes:
   rabbitmq-data:
   rabbitmq-etc:
   ots-db-data:
+  ots_shared:

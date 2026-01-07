@@ -12,10 +12,10 @@ from flask import current_app
 
 
 def get_service_context(service_name:str = "") -> dict:
-    if service_name == "":
+    env_service_name = os.environ.get("OTEL_SERVICE_NAME")
+    if env_service_name:
         # Determine a stable service name and version. Prefer env override.
-        service_name = os.environ.get("OTEL_SERVICE_NAME","opentakserver")
-        
+        service_name = env_service_name
     try:
         service_version = metadata.version(service_name)
     except metadata.PackageNotFoundError:
@@ -52,7 +52,7 @@ def get_deployment_context() -> dict:
     return {"deployment.environment.name": deployment_env}
 
 
-def get_context(service_name:str) -> dict:
+def get_context(service_name:str = "") -> dict:
     """Gather ambient context about the running service. use this data to enrich telemetry context."""
 
     ctx = {}

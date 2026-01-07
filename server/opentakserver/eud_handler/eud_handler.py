@@ -1,7 +1,9 @@
 import os
 import platform
 import sys
-from opentakserver.telemetry import TelemetryOpts, setup_telemetry
+from opentakserver.extensions import inject_extension_dependencies,ExtensionOpts
+inject_extension_dependencies(ExtensionOpts(service_name="eud_handler")) #TODO: replace this dirty DI hack for proper DI
+from opentakserver.extensions import  db, logger, ldap_manager
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
 
 from typing import Any
@@ -41,7 +43,6 @@ from opentakserver.models.VideoStream import VideoStream
 from opentakserver.models.VideoRecording import VideoRecording
 from opentakserver.models.WebAuthn import WebAuthn
 from opentakserver.models.GroupMission import GroupMission
-from opentakserver.extensions import db, logger, ldap_manager
 from opentakserver.defaultconfig import DefaultConfig
 import colorlog
 from flask import Flask, jsonify

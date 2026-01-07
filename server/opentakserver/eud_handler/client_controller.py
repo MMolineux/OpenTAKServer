@@ -112,7 +112,6 @@ class ClientController(Thread):
 
     def on_connection_open(self, connection: pika.SelectConnection):
         self.rabbit_connection.channel(on_open_callback=self.on_channel_open)
-        self.rabbit_connection.add_on_close_callback(self.on_close)
 
     def on_channel_open(self, channel: Channel):
         self.logger.debug(f"Opening RabbitMQ channel for {self.callsign or self.address}")
