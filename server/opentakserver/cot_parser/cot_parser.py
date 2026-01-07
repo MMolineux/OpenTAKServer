@@ -1,8 +1,6 @@
 import base64
 import logging
 import platform
-from opentakserver.extensions import inject_extension_dependencies,ExtensionOpts
-inject_extension_dependencies(ExtensionOpts(service_name="cot_parser")) #TODO: replace this dirty DI hack for proper DI
 from opentakserver.extensions import logger, db
 
 from opentelemetry.instrumentation.flask import FlaskInstrumentor

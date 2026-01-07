@@ -1,8 +1,6 @@
 import os
 import platform
 import sys
-from opentakserver.extensions import inject_extension_dependencies,ExtensionOpts
-inject_extension_dependencies(ExtensionOpts(service_name="eud_handler")) #TODO: replace this dirty DI hack for proper DI
 from opentakserver.extensions import  db, logger, ldap_manager
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
 
