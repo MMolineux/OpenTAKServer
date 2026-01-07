@@ -2,7 +2,7 @@ from gevent import monkey,greenlet
 monkey.patch_all()
 
 import pytz
-from opentakserver.extensions import logger, db, socketio, mail, apscheduler, ldap_manager
+from opentakserver.extensions import logger, db, socketio, mail, apscheduler, ldap_manager, babel
 
 from opentakserver.models.role import Role
 from opentakserver.telemetry.context import LogCtx
@@ -137,6 +137,12 @@ def init_extensions(app):
         channel.exchange_declare("missions", durable=True, exchange_type='topic')  # For Data Sync mission feeds
         channel.exchange_declare("groups", durable=True, exchange_type='topic')  # For channels/groups
         channel.exchange_declare("firehose", durable=True, exchange_type='fanout')  # A firehose of all CoT data
+        
+        # flask-socketio doesn't immediately delcare exchange, causing eud_handler to throw 404 if a device
+        # connects before socket.io is used for first time.
+        # declare preemptively 
+        channel.exchange_declare("flask-socketio", durable=True, exchange_type="fanout") 
+        
         channel.close()
         rabbit_connection.close()
         logger.info("rabbitmq setup conmpleted")
@@ -159,6 +165,8 @@ def init_extensions(app):
     app.security = Security(app, user_datastore, mail_util_cls=EmailValidator, password_util_cls=PasswordValidator, username_util_cls=UsernameValidator)
 
     mail.init_app(app)
+    
+    babel.init_app(app, locale_selector=get_locale, timezone_selector=get_timezone)
 
 
 def create_groups(app: Flask):
@@ -205,7 +213,7 @@ def get_config() -> dict[str, Any]:
     else:
         filepath = os.path.join(config.get("OTS_DATA_FOLDER"), "config.yml")
         with open(filepath, "r") as f:
-            config = yaml.safe_load(f)
+            config.update(yaml.safe_load(f)) # override defaults with values from config.yml
             # TODO: validation with fast fail?
     return config
 
