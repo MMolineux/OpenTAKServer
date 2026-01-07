@@ -49,7 +49,7 @@ class ClientController(Thread):
         self.is_ssl = is_ssl
         self.bound_queues = []
         self.eud = None
-
+        self.rabbit_channel: Channel | None = None
         self.user = None
 
         # Device attributes
@@ -100,7 +100,6 @@ class ClientController(Thread):
             rabbit_credentials = pika.PlainCredentials(self.app.config.get("OTS_RABBITMQ_USERNAME"), self.app.config.get("OTS_RABBITMQ_PASSWORD"))
             rabbit_host = self.app.config.get("OTS_RABBITMQ_SERVER_ADDRESS")
             self.rabbit_connection = pika.SelectConnection(pika.ConnectionParameters(host=rabbit_host, credentials=rabbit_credentials), self.on_connection_open, on_close_callback=self.on_close)
-            self.rabbit_channel: Channel | None = None
             # Start the pika ioloop in a thread or else it blocks and we can't receive any CoT messages
             self.iothread = Thread(target=self.rabbit_connection.ioloop.start, name="IOLOOP")
             self.iothread.daemon = True

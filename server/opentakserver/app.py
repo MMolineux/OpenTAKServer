@@ -2,8 +2,6 @@ from gevent import monkey,greenlet
 monkey.patch_all()
 
 import pytz
-from opentakserver.extensions import ExtensionOpts, inject_extension_dependencies
-inject_extension_dependencies(ExtensionOpts(service_name="opentakserver")) #TODO: replace this dirty DI hack for proper DI
 from opentakserver.extensions import logger, db, socketio, mail, apscheduler, ldap_manager
 
 from opentakserver.models.role import Role
