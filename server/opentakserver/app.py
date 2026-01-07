@@ -390,7 +390,9 @@ def main(app):
 
         # Make sure at least one admin user exists
         admin_user = db.session.execute(db.session.query(Role).join(fsqla_v3.FsModels.roles_users).where(Role.name == "administrator")).scalar()
-        if not admin_user:
+        if admin_user:
+            logger.info("administrator account already exists. skipping default creation...")
+        else:
             logger.info("Creating administrator account. The password is 'password'")
             app.security.datastore.create_user(username="administrator",
                                                password=hash_password("password"), roles=["administrator"])

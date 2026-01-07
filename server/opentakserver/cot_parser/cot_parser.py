@@ -85,6 +85,7 @@ class CoTController:
         rabbit_host = app.config.get("OTS_RABBITMQ_SERVER_ADDRESS")
         self.rabbit_connection = pika.BlockingConnection(pika.ConnectionParameters(host=rabbit_host, credentials=rabbit_credentials))
         self.rabbit_channel = self.rabbit_connection.channel()
+        self.rabbit_channel.exchange_declare(exchange='cot_parser',durable=True)
         self.rabbit_channel.queue_declare(queue='cot_parser')
         self.rabbit_channel.queue_bind(exchange='cot_parser', queue='cot_parser', routing_key='cot_parser')
         self.rabbit_channel.basic_qos(prefetch_count=self.context.app.config.get("OTS_RABBITMQ_PREFETCH"))

@@ -16,13 +16,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - dockerfile: ./server/Dockerfile
+          - dockerfile: ./pkg/docker/Dockerfile.ots
             image: ghcr.io/MMolineux/opentakserver
-          - dockerfile: ./server/opentakserver/Dockerfile.cot_parser
+          - dockerfile: ./pkg/docker/opentakserver/Dockerfile.cot_parser
             image: ghcr.io/MMolineux/ots_cot_parser
-          - dockerfile: ./server/opentakserver/Dockerfile.eud_handler
+          - dockerfile: ./pkg/docker/opentakserver/Dockerfile.eud_handler
             image: ghcr.io/MMolineux/ots_eud_handler
-          - dockerfile: ./ui/Dockerfile
+          - dockerfile: ./pkg/docker/Dockerfile.ui
             image: ghcr.io/MMolineux/ots_ui
     permissions:
       contents: read

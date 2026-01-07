@@ -1,0 +1,38 @@
+server {
+
+        server_name opentakserver_8443;
+
+        # Do not allow certificate enrollment on port 8443
+        location /Marti/api/tls {
+                return 404;
+        }
+
+        # Only allow requests to the Marti API on port 8443
+        location /Marti {
+                proxy_pass ${OTS_API_URL};
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Forwarded-For $remote_addr;
+                proxy_set_header X-Ssl-Cert $ssl_client_escaped_cert;
+        }
+
+        location /api {
+            proxy_pass ${OTS_API_URL};
+            proxy_http_version 1.1;
+            proxy_set_header Host $host:8443;
+            proxy_set_header X-Forwarded-For $remote_addr;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Ssl-Cert $ssl_client_escaped_cert;
+        }
+
+        client_max_body_size 100M;
+
+    # listen [::]:8443 ssl ipv6only=on;
+    listen 8443 ssl;
+    ssl_certificate ${OTS_SERVER_CERT};
+    ssl_certificate_key ${OTS_SERVER_KEY};
+
+    # Require client certificate verification to access the Marti API
+    ssl_verify_client on;
+    ssl_client_certificate ${OTS_TRUSTED_CA_CERT};
+}

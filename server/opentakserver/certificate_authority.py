@@ -27,12 +27,13 @@ class CertificateAuthority:
             self.logger.info("Creating CA...")
             os.makedirs(self.app.config.get("OTS_CA_FOLDER"), exist_ok=True)
 
+            # write openssl cfg file for creating CA extensions
             f = open(os.path.join(self.app.config.get("OTS_CA_FOLDER"), "ca_config.cfg"), 'w')
             f.write(ca_config)
             f.close()
-
+            
+            # using openssl binary, generate OTS certificate authority 
             subject = self.app.config.get("OTS_CA_SUBJECT") + "/CN={}".format(self.app.config.get("OTS_CA_NAME"))
-
             command = (
                 'openssl req -new -sha256 -x509 -days {} -extensions v3_ca -keyout {} -out {} -passout pass:{} -config {} -subj {}'
                 .format(self.app.config.get("OTS_CA_EXPIRATION_TIME"),
@@ -41,14 +42,12 @@ class CertificateAuthority:
                         self.app.config.get("OTS_CA_PASSWORD"),
                         os.path.join(self.app.config.get("OTS_CA_FOLDER"), "ca_config.cfg"),
                         subject))
-
             self.logger.debug(command)
-
             exit_code = subprocess.call(command, shell=True)
-
             if exit_code:
                 raise Exception("Failed to create ca.pem. Exit code {}".format(exit_code))
-
+            
+            
             command = ('openssl x509 -in {} -addtrust clientAuth -addtrust serverAuth -setalias {} -out {}'
                        .format(os.path.join(self.app.config.get("OTS_CA_FOLDER"), "ca.pem"),
                                self.app.config.get("OTS_CA_NAME"),

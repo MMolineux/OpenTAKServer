@@ -15,7 +15,6 @@ def _ensure_bool(v: str) -> bool:
     # helper to avoid repeating ourselves
     return v.lower() in ["true", "1", "yes"]
 
-
 class DefaultConfig:
     SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_hex())
     DEBUG = os.getenv("DEBUG", "False")
@@ -32,7 +31,7 @@ class DefaultConfig:
                      'BR': {'name': 'Português', 'language_code': 'pt_BR'},
                      }
 
-    OTS_DATA_FOLDER = os.getenv("OTS_DATA_FOLDER", os.path.join(Path.home(), "ots"))
+    OTS_DATA_FOLDER = os.path.abspath(os.getenv("OTS_DATA_FOLDER", os.path.join(Path.home(), "ots")))
     OTS_LISTENER_ADDRESS = os.getenv("OTS_LISTENER_ADDRESS", "127.0.0.1")
     OTS_LISTENER_PORT = int(os.getenv("OTS_LISTENER_PORT", 8081))
     OTS_MARTI_HTTP_PORT = int(os.getenv("OTS_MARTI_HTTP_PORT", 8080))

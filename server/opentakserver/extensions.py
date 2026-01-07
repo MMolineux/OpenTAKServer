@@ -19,19 +19,6 @@ from opentakserver.telemetry import TelemetryOpts, setup_telemetry
 from opentelemetry.metrics._internal import Meter
 from opentakserver.telemetry.ots import configure_logging, configure_metrics, configure_tracing
 
-
-def _get_config() -> dict[str, Any]:
-    config = DefaultConfig.to_dict()
-    if not os.path.exists(os.path.join(config.get("OTS_DATA_FOLDER"), "config.yml")):
-        DefaultConfig.to_file()  # persist default settings
-    else:
-        filepath = os.path.join(config.get("OTS_DATA_FOLDER"), "config.yml")
-        with open(filepath, "r") as f:
-            config = yaml.safe_load(f)
-    return config
-
-__cfg = _get_config()
-
 # quick dirty fix to keep global "extensions" pattern for now. 
 #TODO: needs to be swapped out for dependency injection later.
 logger: logging.Logger = None # type: ignore
@@ -54,6 +41,18 @@ def inject_extension_dependencies(opts:ExtensionOpts):
     Adds dependency injection support without modifying how this "global" extensions module works.
     """
     global logger,meter,mail,apscheduler,db,socketio,migrate,ldap_manager,babel
+    
+    def _get_config() -> dict[str, Any]:
+        config = DefaultConfig.to_dict()
+        if not os.path.exists(os.path.join(config.get("OTS_DATA_FOLDER"), "config.yml")):
+            DefaultConfig.to_file()  # persist default settings
+        else:
+            filepath = os.path.join(config.get("OTS_DATA_FOLDER"), "config.yml")
+            with open(filepath, "r") as f:
+                config = yaml.safe_load(f)
+        return config
+
+    __cfg = _get_config()
     
     # setup telemtry deps
     _ots_telemetry_opts = TelemetryOpts(
