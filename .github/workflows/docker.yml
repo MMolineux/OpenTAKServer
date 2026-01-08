@@ -18,12 +18,12 @@ jobs:
         include:
           - dockerfile: ./pkg/docker/Dockerfile.ots
             image: ghcr.io/MMolineux/opentakserver
-          - dockerfile: ./pkg/docker/opentakserver/Dockerfile.cot_parser
-            image: ghcr.io/MMolineux/ots_cot_parser
-          - dockerfile: ./pkg/docker/opentakserver/Dockerfile.eud_handler
-            image: ghcr.io/MMolineux/ots_eud_handler
+          - dockerfile: ./pkg/docker/Dockerfile.cot_parser
+            image: ghcr.io/MMolineux/opentakserver-cot_parser
+          - dockerfile: ./pkg/docker/Dockerfile.eud_handler
+            image: ghcr.io/MMolineux/opentakserver-eud_handler
           - dockerfile: ./pkg/docker/Dockerfile.ui
-            image: ghcr.io/MMolineux/ots_ui
+            image: ghcr.io/MMolineux/opentakserver-ui
     permissions:
       contents: read
       packages: write
