@@ -1,8 +1,18 @@
-from gevent import monkey,greenlet
+from gevent import monkey, greenlet
+
 monkey.patch_all()
 
 import pytz
-from opentakserver.extensions import logger, db, socketio, mail, apscheduler, ldap_manager, babel
+from opentakserver.extensions import (
+    logger,
+    db,
+    socketio,
+    mail,
+    apscheduler,
+    ldap_manager,
+    babel,
+)
+from opentakserver.config import cfg
 
 from opentakserver.models.role import Role
 from opentakserver.telemetry.context import LogCtx
@@ -41,7 +51,13 @@ import pika
 from flask import Flask, current_app, g, request, session
 from flask_cors import CORS
 
-from flask_security import Security, SQLAlchemyUserDatastore, hash_password, uia_username_mapper, uia_email_mapper
+from flask_security import (
+    Security,
+    SQLAlchemyUserDatastore,
+    hash_password,
+    uia_username_mapper,
+    uia_email_mapper,
+)
 from flask_security.models import fsqla_v3 as fsqla, fsqla_v3
 from flask_security.signals import user_registered
 
@@ -57,10 +73,13 @@ try:
 except ModuleNotFoundError:
     logger.warning("Mumble auth not supported on this platform")
 
+
 def get_locale():
-    if 'language' in session:
-        return session['language']
-    return request.accept_languages.best_match(current_app.config.get("OTS_LANGUAGES").keys())
+    if "language" in session:
+        return session["language"]
+    return request.accept_languages.best_match(
+        current_app.config.get("OTS_LANGUAGES").keys()
+    )
 
 
 def get_timezone():
@@ -74,35 +93,53 @@ def init_extensions(app):
     logger.info("initalized sqlalchemy, checking migrations...")
     Migrate(app, db)
     logger.info("migrations applied")
-    
+
     with app.app_context():
-        upgrade(directory=os.path.join(os.path.dirname(os.path.realpath(opentakserver.__file__)), 'migrations'))
-    
+        upgrade(
+            directory=os.path.join(
+                os.path.dirname(os.path.realpath(opentakserver.__file__)), "migrations"
+            )
+        )
+
     logger.info("finished applying migrations")
-    
+
     logger.info("applying extension config")
     # Handle config options that can't be serialized to yaml
-    app.config.update({"SCHEDULER_JOBSTORES": {'default': SQLJobStore(url=app.config.get("SQLALCHEMY_DATABASE_URI"))}})
-    identity_attributes = [{"username": {"mapper": uia_username_mapper, "case_insensitive": True}}]
+    app.config.update(
+        {
+            "SCHEDULER_JOBSTORES": {
+                "default": SQLJobStore(url=app.config.get("SQLALCHEMY_DATABASE_URI"))
+            }
+        }
+    )
+    identity_attributes = [
+        {"username": {"mapper": uia_username_mapper, "case_insensitive": True}}
+    ]
 
     # Don't allow registration unless email is enabled
     if app.config.get("OTS_ENABLE_EMAIL"):
         logger.info("email is enabled, configuring...")
-        identity_attributes.append({"email": {"mapper": uia_email_mapper, "case_insensitive": True}})
-        app.config.update({
-            "SECURITY_REGISTERABLE": True,
-            "SECURITY_CONFIRMABLE": True,
-            "SECURITY_RECOVERABLE": True,
-            "SECURITY_TWO_FACTOR_ENABLED_METHODS": ["authenticator", "email"]
-        })
+        identity_attributes.append(
+            {"email": {"mapper": uia_email_mapper, "case_insensitive": True}}
+        )
+        app.config.update(
+            {
+                "SECURITY_REGISTERABLE": True,
+                "SECURITY_CONFIRMABLE": True,
+                "SECURITY_RECOVERABLE": True,
+                "SECURITY_TWO_FACTOR_ENABLED_METHODS": ["authenticator", "email"],
+            }
+        )
     else:
         logger.info("email is not configured")
-        app.config.update({
-            "SECURITY_REGISTERABLE": False,
-            "SECURITY_CONFIRMABLE": False,
-            "SECURITY_RECOVERABLE": False,
-            "SECURITY_TWO_FACTOR_ENABLED_METHODS": ["authenticator"]
-        })
+        app.config.update(
+            {
+                "SECURITY_REGISTERABLE": False,
+                "SECURITY_CONFIRMABLE": False,
+                "SECURITY_RECOVERABLE": False,
+                "SECURITY_TWO_FACTOR_ENABLED_METHODS": ["authenticator"],
+            }
+        )
 
     if app.config.get("OTS_ENABLE_LDAP"):
         logger.info("Enabling LDAP")
@@ -116,33 +153,60 @@ def init_extensions(app):
     ca.create_ca()
 
     logger.info("setting up security headers")
-    cors = CORS(app, resources={r"/api/*": {"origins": "*"}, r"/Marti/*": {"origins": "*"}, r"/*": {"origins": "*"}},
-                supports_credentials=True)
+    cors = CORS(
+        app,
+        resources={
+            r"/api/*": {"origins": "*"},
+            r"/Marti/*": {"origins": "*"},
+            r"/*": {"origins": "*"},
+        },
+        supports_credentials=True,
+    )
     flask_wtf.CSRFProtect(app)
 
     socketio_logger = logger
-    socketio.init_app(app, logger=socketio_logger, ping_timeout=1, message_queue="amqp://" + app.config.get("OTS_RABBITMQ_SERVER_ADDRESS"))
-    
-    rabbit_credentials = pika.PlainCredentials(app.config.get("OTS_RABBITMQ_USERNAME"), app.config.get("OTS_RABBITMQ_PASSWORD"))
+    socketio.init_app(
+        app,
+        logger=socketio_logger,
+        ping_timeout=1,
+        message_queue="amqp://" + app.config.get("OTS_RABBITMQ_SERVER_ADDRESS"),
+    )
+
+    rabbit_credentials = pika.PlainCredentials(
+        app.config.get("OTS_RABBITMQ_USERNAME"), app.config.get("OTS_RABBITMQ_PASSWORD")
+    )
     rabbit_host = app.config.get("OTS_RABBITMQ_SERVER_ADDRESS")
     params = pika.ConnectionParameters(host=rabbit_host, credentials=rabbit_credentials)
-    with LogCtx(rabbitmq_params={"host":params.host,"port":params.port,"vhost":params.virtual_host,"ssl": bool(params.ssl_options)}):
+    with LogCtx(
+        rabbitmq_params={
+            "host": params.host,
+            "port": params.port,
+            "vhost": params.virtual_host,
+            "ssl": bool(params.ssl_options),
+        }
+    ):
         logger.info(f"connecting to rabbitmq on {params}")
         rabbit_connection = pika.BlockingConnection(params)
 
         channel = rabbit_connection.channel()
-        channel.exchange_declare('dms', durable=True, exchange_type='direct')
-        channel.exchange_declare('cot_parser', durable=True, exchange_type='direct')
-        channel.exchange_declare('chatrooms', durable=True, exchange_type='direct')
-        channel.exchange_declare("missions", durable=True, exchange_type='topic')  # For Data Sync mission feeds
-        channel.exchange_declare("groups", durable=True, exchange_type='topic')  # For channels/groups
-        channel.exchange_declare("firehose", durable=True, exchange_type='fanout')  # A firehose of all CoT data
-        
+        channel.exchange_declare("dms", durable=True, exchange_type="direct")
+        channel.exchange_declare("cot_parser", durable=True, exchange_type="direct")
+        channel.exchange_declare("chatrooms", durable=True, exchange_type="direct")
+        channel.exchange_declare(
+            "missions", durable=True, exchange_type="topic"
+        )  # For Data Sync mission feeds
+        channel.exchange_declare(
+            "groups", durable=True, exchange_type="topic"
+        )  # For channels/groups
+        channel.exchange_declare(
+            "firehose", durable=True, exchange_type="fanout"
+        )  # A firehose of all CoT data
+
         # flask-socketio doesn't immediately delcare exchange, causing eud_handler to throw 404 if a device
         # connects before socket.io is used for first time.
-        # declare preemptively 
-        channel.exchange_declare("flask-socketio", durable=True, exchange_type="fanout") 
-        
+        # declare preemptively
+        channel.exchange_declare("flask-socketio", durable=True, exchange_type="fanout")
+
         channel.close()
         rabbit_connection.close()
         logger.info("rabbitmq setup conmpleted")
@@ -162,10 +226,16 @@ def init_extensions(app):
     from opentakserver.models.role import Role
 
     user_datastore = SQLAlchemyUserDatastore(db, User, Role, WebAuthn)
-    app.security = Security(app, user_datastore, mail_util_cls=EmailValidator, password_util_cls=PasswordValidator, username_util_cls=UsernameValidator)
+    app.security = Security(
+        app,
+        user_datastore,
+        mail_util_cls=EmailValidator,
+        password_util_cls=PasswordValidator,
+        username_util_cls=UsernameValidator,
+    )
 
     mail.init_app(app)
-    
+
     babel.init_app(app, locale_selector=get_locale, timezone_selector=get_timezone)
 
 
@@ -202,23 +272,14 @@ def create_groups(app: Flask):
         logger.error(f"Failed to create groups: {e}")
         logger.debug(traceback.format_exc())
 
+
 def is_first_run(cfg: dict[str, Any]):
     # existence of config file is used to determine whether OTS has been run before
     return not os.path.exists(os.path.join(cfg.get("OTS_DATA_FOLDER"), "config.yml"))
 
-def get_config() -> dict[str, Any]:
-    config = DefaultConfig.to_dict()
-    if is_first_run(config):
-        DefaultConfig.to_file()  # persist default settings
-    else:
-        filepath = os.path.join(config.get("OTS_DATA_FOLDER"), "config.yml")
-        with open(filepath, "r") as f:
-            config.update(yaml.safe_load(f)) # override defaults with values from config.yml
-            # TODO: validation with fast fail?
-    return config
 
 def create_app(cli=True):
-    config = get_config()
+    config = cfg
     # then setup app
     app = Flask(__name__)
     app.config.from_mapping(config)
@@ -232,12 +293,26 @@ def create_app(cli=True):
         if app.config.get("OTS_MEDIAMTX_ENABLE"):
             try:
                 new_conf = None
-                with open(os.path.join(app.config.get("OTS_DATA_FOLDER"), "mediamtx", "mediamtx.yml"), "r") as mediamtx_config:
+                with open(
+                    os.path.join(
+                        app.config.get("OTS_DATA_FOLDER"), "mediamtx", "mediamtx.yml"
+                    ),
+                    "r",
+                ) as mediamtx_config:
                     conf = mediamtx_config.read()
                     if "MTX_TOKEN" in conf:
-                        new_conf = conf.replace("MTX_TOKEN", app.config.get("OTS_MEDIAMTX_TOKEN"))
+                        new_conf = conf.replace(
+                            "MTX_TOKEN", app.config.get("OTS_MEDIAMTX_TOKEN")
+                        )
                 if new_conf:
-                    with open(os.path.join(app.config.get("OTS_DATA_FOLDER"), "mediamtx", "mediamtx.yml"), "w") as mediamtx_config:
+                    with open(
+                        os.path.join(
+                            app.config.get("OTS_DATA_FOLDER"),
+                            "mediamtx",
+                            "mediamtx.yml",
+                        ),
+                        "w",
+                    ) as mediamtx_config:
                         mediamtx_config.write(new_conf)
             except BaseException as e:
                 logger.error("Failed to set MediaMTX token: {}".format(e))
@@ -247,26 +322,36 @@ def create_app(cli=True):
         init_extensions(app)
 
         from opentakserver.blueprints.marti_api import marti_blueprint
+
         app.register_blueprint(marti_blueprint)
 
         from opentakserver.blueprints.ots_api import ots_api
+
         app.register_blueprint(ots_api)
 
         from opentakserver.blueprints.ots_socketio import ots_socketio_blueprint
+
         app.register_blueprint(ots_socketio_blueprint)
 
         from opentakserver.blueprints.scheduled_jobs import scheduler_blueprint
+
         app.register_blueprint(scheduler_blueprint)
 
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_host=1)
 
     else:
         from opentakserver.blueprints.cli import ots, translate
+
         app.cli.add_command(ots, name="ots")
         app.cli.add_command(translate, name="translate")
 
-        if os.path.exists(os.path.join(app.config.get("OTS_DATA_FOLDER"), "config.yml")):
-            app.config.from_file(os.path.join(app.config.get("OTS_DATA_FOLDER"), "config.yml"), load=yaml.safe_load)
+        if os.path.exists(
+            os.path.join(app.config.get("OTS_DATA_FOLDER"), "config.yml")
+        ):
+            app.config.from_file(
+                os.path.join(app.config.get("OTS_DATA_FOLDER"), "config.yml"),
+                load=yaml.safe_load,
+            )
             db.init_app(app)
             Migrate(app, db)
 
@@ -281,22 +366,33 @@ def create_app(cli=True):
         from opentakserver.models.role import Role
 
         user_datastore = SQLAlchemyUserDatastore(db, User, Role, WebAuthn)
-        app.security = Security(app, user_datastore, mail_util_cls=EmailValidator, password_util_cls=PasswordValidator, username_util_cls=UsernameValidator)
+        app.security = Security(
+            app,
+            user_datastore,
+            mail_util_cls=EmailValidator,
+            password_util_cls=PasswordValidator,
+            username_util_cls=UsernameValidator,
+        )
 
         # Register blueprints to properly import all the DB models without circular imports
         from opentakserver.blueprints.marti_api import marti_blueprint
+
         app.register_blueprint(marti_blueprint)
 
         from opentakserver.blueprints.ots_api import ots_api
+
         app.register_blueprint(ots_api)
 
         from opentakserver.blueprints.ots_socketio import ots_socketio_blueprint
+
         app.register_blueprint(ots_socketio_blueprint)
 
         from opentakserver.blueprints.scheduled_jobs import scheduler_blueprint
+
         app.register_blueprint(scheduler_blueprint)
 
     return app
+
 
 @user_registered.connect_via(current_app)
 def user_registered_sighandler(app, user, confirmation_token, **kwargs):
@@ -309,10 +405,20 @@ def user_registered_sighandler(app, user, confirmation_token, **kwargs):
 def create_default_groups(app):
     with app.app_context():
         if not app.config.get("OTS_ENABLE_LDAP"):
-            anon_group = db.session.execute(db.session.query(Group).filter_by(name="__ANON__")).first()
-            adsb_group = db.session.execute(db.session.query(Group).filter_by(name=app.config.get("OTS_ADSB_GROUP"))).first()
-            ais_group = db.session.execute(db.session.query(Group).filter_by(name=app.config.get("OTS_AIS_GROUP"))).first()
-            meshtastic_group = db.session.execute(db.session.query(Group).filter_by(name=app.config.get("OTS_MESHTASTIC_GROUP"))).first()
+            anon_group = db.session.execute(
+                db.session.query(Group).filter_by(name="__ANON__")
+            ).first()
+            adsb_group = db.session.execute(
+                db.session.query(Group).filter_by(name=app.config.get("OTS_ADSB_GROUP"))
+            ).first()
+            ais_group = db.session.execute(
+                db.session.query(Group).filter_by(name=app.config.get("OTS_AIS_GROUP"))
+            ).first()
+            meshtastic_group = db.session.execute(
+                db.session.query(Group).filter_by(
+                    name=app.config.get("OTS_MESHTASTIC_GROUP")
+                )
+            ).first()
 
             # Commit to DB after every one to ensure that get_next_bitpos works
 
@@ -344,7 +450,9 @@ def create_default_groups(app):
                 db.session.commit()
 
             if not meshtastic_group:
-                logger.info(f"Creating the {app.config.get('OTS_MESHTASTIC_GROUP')} group")
+                logger.info(
+                    f"Creating the {app.config.get('OTS_MESHTASTIC_GROUP')} group"
+                )
                 meshtastic_group = Group()
                 meshtastic_group.name = app.config.get("OTS_MESHTASTIC_GROUP")
                 meshtastic_group.type = GroupTypeEnum.SYSTEM
@@ -360,8 +468,14 @@ def main(app):
         if icons == 0:
             logger.info("Downloading icons...")
             try:
-                r = requests.get("https://github.com/brian7704/OpenTAKServer-Installer/raw/master/iconsets.sqlite", stream=True)
-                with open(os.path.join(app.config.get("OTS_DATA_FOLDER"), "icons.sqlite"), "wb") as f:
+                r = requests.get(
+                    "https://github.com/brian7704/OpenTAKServer-Installer/raw/master/iconsets.sqlite",
+                    stream=True,
+                )
+                with open(
+                    os.path.join(app.config.get("OTS_DATA_FOLDER"), "icons.sqlite"),
+                    "wb",
+                ) as f:
                     f.write(r.content)
 
                 def dict_factory(cursor, row):
@@ -370,7 +484,9 @@ def main(app):
                         d[col[0]] = row[idx]
                     return d
 
-                con = sqlite3.connect(os.path.join(app.config.get("OTS_DATA_FOLDER"), "icons.sqlite"))
+                con = sqlite3.connect(
+                    os.path.join(app.config.get("OTS_DATA_FOLDER"), "icons.sqlite")
+                )
                 con.row_factory = dict_factory
                 cur = con.cursor()
                 rows = cur.execute("SELECT * FROM icons")
@@ -395,13 +511,22 @@ def main(app):
         )
 
         # Make sure at least one admin user exists
-        admin_user = db.session.execute(db.session.query(Role).join(fsqla_v3.FsModels.roles_users).where(Role.name == "administrator")).scalar()
+        admin_user = db.session.execute(
+            db.session.query(Role)
+            .join(fsqla_v3.FsModels.roles_users)
+            .where(Role.name == "administrator")
+        ).scalar()
         if admin_user:
-            logger.info("administrator account already exists. skipping default creation...")
+            logger.info(
+                "administrator account already exists. skipping default creation..."
+            )
         else:
             logger.info("Creating administrator account. The password is 'password'")
-            app.security.datastore.create_user(username="administrator",
-                                               password=hash_password("password"), roles=["administrator"])
+            app.security.datastore.create_user(
+                username="administrator",
+                password=hash_password("password"),
+                roles=["administrator"],
+            )
         db.session.commit()
 
     if app.config.get("OTS_ENABLE_MESHTASTIC"):
@@ -444,6 +569,7 @@ def main(app):
         logger.warning("Caught CTRL+C, exiting...")
         if app.config.get("OTS_ENABLE_PLUGINS"):
             app.plugin_manager.stop_plugins()
+
 
 def start():
     monkey.patch_all()
