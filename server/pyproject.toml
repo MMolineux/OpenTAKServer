@@ -71,6 +71,7 @@ opentelemetry-instrumentation-flask = "^0.59b0"
 opentelemetry-instrumentation-sqlalchemy = "^0.59b0"
 opentelemetry-instrumentation-pika = "^0.59b0"
 zope-interface = "8.1.1"
+psycopg2-binary = "^2.9.11"
 
 [build-system]
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
