@@ -8,24 +8,30 @@ from opentakserver.defaultconfig import DefaultConfig
 
 
 def _ensure_bool(v: str) -> bool:
-    return v.lower() in ["true", "1", "yes"]
+    if v is None:
+        return False
+    return str(v).lower() in ["true", "1", "yes", "on", "y"]
 
 
 def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
+    env_lookup = {k.lower(): k for k in os.environ}
     for key in dir(DefaultConfig):
-        if key.isupper() and key in os.environ:
-            original_value = DefaultConfig.__dict__[key]
-            env_value = os.environ[key]
-            if isinstance(original_value, bool):
-                config[key] = _ensure_bool(env_value)
-            elif isinstance(original_value, int):
-                config[key] = int(env_value)
-            elif isinstance(original_value, float):
-                config[key] = float(env_value)
-            elif isinstance(original_value, list):
-                config[key] = env_value.split(",")
-            else:
-                config[key] = env_value
+        if key.isupper():
+            env_key = env_lookup.get(key.lower())
+            if env_key:
+                print(f"applying env override for {key}")
+                original_value = DefaultConfig.__dict__[key]
+                env_value = os.environ[env_key]
+                if isinstance(original_value, bool):
+                    config[key] = _ensure_bool(env_value)
+                elif isinstance(original_value, int):
+                    config[key] = int(env_value)
+                elif isinstance(original_value, float):
+                    config[key] = float(env_value)
+                elif isinstance(original_value, list):
+                    config[key] = env_value.split(",")
+                else:
+                    config[key] = env_value
     return config
 
 
