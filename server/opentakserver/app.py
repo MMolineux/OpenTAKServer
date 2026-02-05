@@ -2,6 +2,7 @@ from gevent import monkey, greenlet
 
 monkey.patch_all()
 
+from opentakserver.config import cfg
 import pytz
 from opentakserver.extensions import (
     logger,
@@ -12,7 +13,6 @@ from opentakserver.extensions import (
     ldap_manager,
     babel,
 )
-from opentakserver.config import cfg
 
 from opentakserver.models.role import Role
 from opentakserver.telemetry.context import LogCtx
