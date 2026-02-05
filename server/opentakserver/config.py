@@ -7,22 +7,48 @@ import yaml
 from opentakserver.defaultconfig import DefaultConfig
 
 
+def _ensure_bool(v: str) -> bool:
+    return v.lower() in ["true", "1", "yes"]
+
+
+def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
+    for key in dir(DefaultConfig):
+        if key.isupper() and key in os.environ:
+            original_value = DefaultConfig.__dict__[key]
+            env_value = os.environ[key]
+            if isinstance(original_value, bool):
+                config[key] = _ensure_bool(env_value)
+            elif isinstance(original_value, int):
+                config[key] = int(env_value)
+            elif isinstance(original_value, float):
+                config[key] = float(env_value)
+            elif isinstance(original_value, list):
+                config[key] = env_value.split(",")
+            else:
+                config[key] = env_value
+    return config
+
+
 def get_config() -> dict[str, Any]:
     config = DefaultConfig.to_dict()
     config_file = os.path.join(
         config.get("OTS_DATA_FOLDER", os.path.join(Path.home(), "ots")), "config.yml"
     )
 
-    # allow specific override via env
     config_file = os.environ.get("OTS_CONFIG_FILE", config_file)
 
     if not os.path.exists(config_file):
-        DefaultConfig.to_file()  # persist default settings
+        # persist defaults, which are derived from environ or defaults during first startup
+        DefaultConfig.to_file()
     else:
+        # load config from file, backfill missing keys from DefaultConfig
         with open(config_file, "r") as f:
-            config.update(
-                yaml.safe_load(f)
-            )  # override defaults with values from config.yml
+            config.update(yaml.safe_load(f))
+
+    # add option to override both defaults, and file config using environment variables
+    if _ensure_bool(os.environ.get("OTS_ENVVAR_OVERRIDES", "False")):
+        config = _apply_env_overrides(config)
+
     return config
 
 
