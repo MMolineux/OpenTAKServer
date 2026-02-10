@@ -108,6 +108,20 @@ class DefaultConfig:
     LDAP_BIND_USER_DN = "cn=admin,ou=users=dc=example,dc=com"
     LDAP_BIND_USER_PASSWORD = "password"
 
+    OTS_OTEL_ENABLE = _ensure_bool(
+        os.getenv("OTS_OTEL_ENABLE","False")
+    ) # globally disable opentelemtry as sink for logs, traces, metrics.
+
+    # Metrics
+    OTS_METRICS_ENABLE = _ensure_bool(
+        os.getenv("OTS_METRICS_ENABLE",str(os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT") is not None))
+    )
+    
+    # Traces
+    OTS_TRACES_ENABLE = _ensure_bool(
+        os.getenv("OTS_TRACES_ENABLE",str(os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT") is not None))
+    )
+
     # Logging
     OTS_LOG_LEVEL = os.getenv(
         "OTS_LOG_LEVEL", os.getenv("LOG_LEVEL", "INFO")

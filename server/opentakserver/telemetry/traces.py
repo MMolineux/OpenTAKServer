@@ -11,7 +11,7 @@ from opentelemetry import trace
 
 @dataclass
 class TracingOptions:
-    enabled: bool = True
+    enabled: bool = False
     service_name: str = "opentakserver"
 
 def setup_tracing(opts: TracingOptions):

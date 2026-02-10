@@ -10,7 +10,7 @@ from opentelemetry import metrics
 from opentakserver.telemetry.context import get_context
 @dataclass
 class MetricsOptions:
-    enabled: bool = True
+    enabled: bool = False
     service_name: str = "opentakserver"
 
 def setup_metrics(opts: MetricsOptions) -> Optional[Meter]:
